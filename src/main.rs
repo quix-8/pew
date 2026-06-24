@@ -65,7 +65,7 @@ const VERTICES: &[Vertex] = &[
 const INDICES: &[u16] = &[
     0, 1, 2, // Первый треугольник (A, B, C)
     0, 2, 3, // Второй треугольник (A, C, D)
-    0, 4, 3, // A E D
+    0, 3, 4, // A E D
 ];
 
 // --- 2. СОСТОЯНИЕ ПРИЛОЖЕНИЯ ---
@@ -256,8 +256,8 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            // Рисуем 6 индексов (2 треугольника)
-            render_pass.draw_indexed(0..6, 0, 0..1);
+            let num_indices = INDICES.len() as u32;
+            render_pass.draw_indexed(0..num_indices, 0, 0..1);
         }
 
         // Отправляем команды в очередь GPU и показываем кадр
