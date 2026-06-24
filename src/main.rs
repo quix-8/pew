@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
     window::{Window, WindowBuilder},
 };
 
@@ -55,6 +55,10 @@ const VERTICES: &[Vertex] = &[
         position: [0.5, 0.5, 0.0],
         color: [1.0, 1.0, 0.0],
     }, // D (Правый верхний, Желтый)
+    Vertex {
+        position: [0.0, 1.0, 0.0],
+        color: [1.0, 1.0, 1.0],
+    },
 ];
 
 // Индексы, указывающие, как из вершин собрать 2 треугольника
@@ -269,7 +273,7 @@ pub fn main() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new()
-        .with_title("wgpu Квадрат")
+        .with_title("wgpu app")
         .build(&event_loop)
         .unwrap();
 
