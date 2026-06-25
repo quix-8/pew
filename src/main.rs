@@ -324,6 +324,22 @@ impl<'a> State<'a> {
 
         Ok(())
     }
+
+    fn update(&mut self, time: f32) {
+        // Используем синус времени, чтобы домик плавно летал влево-вправо
+        let x = time.sin() * 0.5;
+
+        // Создаем новую матрицу
+        let new_matrix = glam::Mat4::from_translation(glam::Vec3::new(x, 0.0, 0.0));
+
+        let new_uniform = CameraUniform {
+            view_proj: new_matrix.to_cols_array_2d(),
+        };
+
+        // МАГИЯ ЗДЕСЬ: Записываем новые байты поверх старых в буфер видеокарты!
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[new_uniform]));
+    }
 }
 
 // --- 3. ЗАПУСК ПРИЛОЖЕНИЯ ---
@@ -339,6 +355,8 @@ pub fn main() {
     // pollster блокирует поток, пока async функция new() не выполнится
     let mut state = pollster::block_on(State::new(&window));
 
+    let start_time = std::time::Instant::now();
+
     event_loop
         .run(move |event, elwt| match event {
             Event::WindowEvent {
@@ -349,12 +367,16 @@ pub fn main() {
                 WindowEvent::Resized(physical_size) => {
                     state.resize(*physical_size);
                 }
-                WindowEvent::RedrawRequested => match state.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                    Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                    Err(e) => eprintln!("{:?}", e),
-                },
+                WindowEvent::RedrawRequested => {
+                    let time = start_time.elapsed().as_secs_f32();
+                    state.update(time);
+                    match state.render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                        Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
+                        Err(e) => eprintln!("{:?}", e),
+                    }
+                }
                 _ => {}
             },
             Event::AboutToWait => {
