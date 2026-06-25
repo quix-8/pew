@@ -37,6 +37,25 @@ impl Vertex {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    // wgpu не понимает glam::Mat4, но прекрасно понимает массив массивов
+    view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+    fn new() -> Self {
+        // Создаем матрицу сдвига вправо (по X на 0.5) через glam
+        let matrix = glam::Mat4::from_translation(glam::Vec3::new(0.5, 0.0, 0.0));
+
+        Self {
+            // Конвертируем Mat4 из glam в плоский массив байтов
+            view_proj: matrix.to_cols_array_2d(),
+        }
+    }
+}
+
 // Координаты квадрата (4 вершины)
 const VERTICES: &[Vertex] = &[
     Vertex {
@@ -80,6 +99,8 @@ struct State<'a> {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     window: &'a Window,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
 }
 
 impl<'a> State<'a> {
@@ -141,11 +162,45 @@ impl<'a> State<'a> {
         // 6. Загружаем шейдер
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
+        let camera_uniform = CameraUniform::new();
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]), // превращаем структуру в &[u8]
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // 2. Создаем "Макет" (Layout). Он нужен пайплайну во время компиляции,
+        // чтобы видеокарта знала: "Ага, в слоте 0 будет лежать Юниформ".
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,                             // Тот самый @binding(0) в шейдере
+                    visibility: wgpu::ShaderStages::VERTEX, // Матрица нужна только для вершин
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        // 3. Создаем саму Bind Group. Склеиваем Layout и конкретный Buffer.
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("camera_bind_group"),
+        });
+
         // 7. Настраиваем Render Pipeline
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&camera_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -207,6 +262,8 @@ impl<'a> State<'a> {
             render_pipeline,
             vertex_buffer,
             index_buffer,
+            camera_buffer,
+            camera_bind_group,
         }
     }
 
@@ -254,6 +311,7 @@ impl<'a> State<'a> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             let num_indices = INDICES.len() as u32;
