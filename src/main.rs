@@ -169,8 +169,6 @@ impl<'a> State<'a> {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 2. Создаем "Макет" (Layout). Он нужен пайплайну во время компиляции,
-        // чтобы видеокарта знала: "Ага, в слоте 0 будет лежать Юниформ".
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
